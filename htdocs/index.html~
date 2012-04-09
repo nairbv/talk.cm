@@ -1,0 +1,101 @@
+<html>
+<head>
+<title>Chat Page</title>
+
+<link rel="stylesheet" type="text/css" href="/style.css"/>
+
+<script src="/jquery.js" type="text/javascript"></script>
+<script src="/eventsource.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+
+function send() {
+    var name = $("#name").val();
+    var text = $("#message").val();
+    $.ajax({
+        method: "GET",
+        url: "/message",
+        data: "identifier={%THE_IDENTIFIER%}&message="+name + ": " +text,
+        success: function(msg) {
+            //should be an XML response saying "OK"
+            $("#message").val("");
+        },
+        error: function(err) {
+            console.log("error: "+err);
+        }
+    });
+}
+
+
+
+
+function setupEventSource() {
+    var source = new EventSource('/listen?identifier={%THE_IDENTIFIER%}');
+    source.onmessage = function(e) {
+        handleMessage(e.data);
+        console.log(e.data);
+    }
+
+/*    source.addEventListener('message',function(e) {
+        handleMessage(e.data);
+    },false);
+*/
+    source.onerror = function (e) { 
+        console.log(e);
+        if( source.readyState == souce.CLOSED) { 
+            setTimeout(setupEventSource, 3000);
+        } 
+    };
+};
+
+$(document).ready(function() {
+    setTimeout('setupEventSource();',200);
+
+});
+
+function handleMessage(msg) {
+    //$("chatwindow").innerHtml += msg;
+    $("#chatwindow").val($("#chatwindow").val() + "\n"+ msg);
+    var chat = document.getElementById('chatwindow');
+    chat.scrollTop = chat.scrollHeight;
+    console.log(msg);
+
+/*    var oldTitle = document.title;
+    var msg = "New Message!";
+    var timeoutId = setInterval(function() {
+        document.title = document.title == msg ? ' ' : msg;
+    }, 1000);
+    window.onfocus = function() {
+        clearInterval(timeoutId);
+        document.title = oldTitle;
+        window.onmousemove = null;
+    };*/
+}
+
+/*    source.addEventListener('error',function(e) {
+        console.log(e.data);
+        $("#error").html(e.data);
+    },false);
+*/
+
+</script>
+</head>
+<body>
+<div id="error"/>
+<div class="heading">
+<br/>
+To chat with a friend, just send the URL: <input type="text" value="http://talk.cm/c/{%THE_IDENTIFIER%}"/>, or choose a room name by changing the part after the /c/.
+<br/>
+</div>
+
+<textarea class="chatwindow" id="chatwindow" readonly>
+</textarea>
+<form action="javascript:send();">
+<input class="nameinput" id="name" value="Anonymous" style="width:100px;"/>
+<input class="textinput" id="message" type="text" name="message" autocomplete="off" style="width: 80%; "/>
+<input class="button" type="submit" id="submit" value="Send"/>
+</form>
+</body>
+</html>
+
+

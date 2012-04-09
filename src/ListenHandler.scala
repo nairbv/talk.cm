@@ -1,0 +1,118 @@
+package net.brianvaughan.scala.chat;
+
+
+import com.sun.net.httpserver._
+import java.io._
+import java.net._
+import scala.actors._
+import scala.actors.Actor._
+import scala.xml._
+
+
+case class Message(message:String)
+
+class ListeningActor(val identifier:String, t:HttpExchange) extends Actor {
+  val os:OutputStream = t.getResponseBody();
+  t.getResponseHeaders().set("Content-Type","text/event-stream")
+  t.getResponseHeaders().set("Transfer-Encoding","chunked")
+  t.sendResponseHeaders(200,0)
+
+  def pushResponse(response:String) = {
+    try {
+      os.write(response.getBytes())
+      os.flush()
+      os.flush()
+    } catch {
+      case ioe: IOException =>
+        println("user disconnecting from "+ identifier + " with " + ioe.getMessage())
+        ListenHandler.removeClient(this)
+        ListenHandler.messageAll(identifier, "User disconnected")
+        exit()
+        //this was generating more io exceptions:
+        //if(os != null) { os.close() }
+      case e: Exception =>
+        println("exception in listeningactor: " + e)
+        ListenHandler.removeClient(this)
+        exit()
+      }
+  }
+
+  def act() = {
+    loop {
+      receiveWithin(5000) {
+          case Message(msg) => {
+            val formatted = "\ndata:"+msg.replaceAll("\n","\ndata: ") + "\n\n"
+            val response = "event: message"+ formatted
+            this.pushResponse(response)
+          }
+          case TIMEOUT => {
+            //send a keep-alive
+            //":" marks a "comment" of sorts, something to be ignored.
+            this.pushResponse("\n:keep-alive\n\n")
+          }
+        case _ =>
+          println("received unknown message type")
+      }
+    }
+  }
+}
+
+
+class ListenHandler extends HttpHandler {
+  def handle(t:HttpExchange):Unit = {
+    try {
+      println("handling request with listenhandler")
+      val params:java.util.HashMap[String,Object] = 
+            t.getAttribute("parameters").asInstanceOf[java.util.HashMap[String,Object]];
+      val identifier = params.get("identifier").asInstanceOf[String]
+      if( identifier == null ) {
+        val response = "event: error\ndata: identifier and message must be specified"
+          val os:OutputStream = t.getResponseBody();
+          t.getResponseHeaders().set("Content-Type","application/x-dom-event-stream")//"text/event-stream")
+          t.sendResponseHeaders(200,response.length())
+          os.write(response.getBytes())
+          os.close()
+      } else {
+        val actor = new ListeningActor(identifier,t)
+        actor.start
+        ListenHandler.addClient(actor)
+        ListenHandler.messageAll(identifier,"New user connected.")
+      }
+    } catch {
+      case e: Exception => {
+        println("Something failed: " + e.getMessage())
+      }
+    }
+  }
+}
+
+object ListenHandler {
+  var idToClients = Map[String,List[ListeningActor]]()
+  def addClient(client:ListeningActor) = {
+    idToClients = if( idToClients.contains(client.identifier) ) {
+      idToClients.updated(client.identifier, client :: idToClients(client.identifier) )
+    } else {
+      idToClients.updated(client.identifier, List[ListeningActor](client))
+    }
+  }
+  def removeClient(client:ListeningActor) = {
+    idToClients.get(client.identifier).foreach{
+      clients => 
+        idToClients = idToClients.updated(client.identifier, clients.filterNot( c => c == client ))
+    }
+  }
+
+  def messageAll(id:String, message:String, exclude: Option[ListeningActor]=None ) = {
+    val clients = idToClients.getOrElse(id, List[ListeningActor]())
+    clients.foreach{ client => 
+      if ( Some[ListeningActor](client) != exclude ) 
+      { 
+        client ! Message(message) 
+      }
+    }
+  }
+}
+
+
+
+

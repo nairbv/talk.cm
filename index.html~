@@ -1,0 +1,46 @@
+<html>
+<head>
+<title>Chat Page</title>
+<script>
+${document).ready(function() {
+    var source = new EventSource('/listen?identifier={%THE_IDENTIFIER%}');
+    source.addEventListener('message',function(e) {
+        $("#chatwindow").append(e.data);
+    },false);
+
+    source.addEventListener('error',function(e) {
+        $("#error").html(e.data);
+    },false);
+});
+function send() {
+    var text = $("#message").val();
+    $.ajax({
+        url: "/message",
+        data: "identifier={%THE_IDENTIFIER%}&message="+text,
+        success: function(msg) {
+            //should be an XML response saying "OK"
+            Console.log("submitted!")
+            $("#message").html("");
+        },
+        error: function(err) {
+            console.log("error: "+err);
+        }
+    });
+}
+
+</script>
+</head>
+<body>
+Hello.
+<br/>
+You are using {%THE_IDENTIFIER%}
+<br/>
+<div id="error"/>
+<br/>
+<textarea id="chatwindow" disabled="true">
+</textarea>
+<form method="post" action="javascript:send();">
+<input type="text" name="message"/>
+</form>
+</body>
+</html>

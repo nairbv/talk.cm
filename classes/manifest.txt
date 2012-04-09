@@ -1,0 +1,2 @@
+Main-Class: net.brianvaughan.scala.chat.ChatServer
+Class-Path: . scala-library.jar log4j.jar
